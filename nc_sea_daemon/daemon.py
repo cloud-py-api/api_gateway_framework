@@ -11,6 +11,7 @@ from subprocess import Popen
 from typing import Dict, List
 
 import uvicorn
+from authlib.integrations.requests_client import OAuth2Session
 from config import Config
 from fastapi import Depends, FastAPI, File, HTTPException, status
 from fastapi.encoders import jsonable_encoder
@@ -125,12 +126,12 @@ def app_run(_username: Annotated[str, Depends(current_username)], app_name: str,
         oauth2 = True
     app_config_args: List = app_config.get("args", [])
     modified_env = environ.copy()
-    modified_env["nextcloud_url"] = CFG.options["nc_url"]
+    modified_env["nextcloud_url"] = CFG.options["nc_url"].replace("/index.php", "")
     if oauth2:
-        modified_env[f"nc_auth_access_token"] = CFG.options[f"nc_auth_access_token"]
+        modified_env["nc_auth_access_token"] = CFG.options["nc_auth_access_token"]
     else:
-        modified_env[f"nc_auth_user"] = CFG.options[f"nc_auth_user"]
-        modified_env[f"nc_auth_password"] = CFG.options[f"nc_auth_password"]
+        modified_env["nc_auth_user"] = CFG.options["nc_auth_user"]
+        modified_env["nc_auth_password"] = CFG.options["nc_auth_password"]
     modified_env.update(**app_cfg_daemon)
     try:
         app_args = loads(args)
@@ -183,6 +184,18 @@ def option_set(_username: Annotated[str, Depends(current_username)], key: str, v
         CFG.options[key] = value
     CFG.save()
     return JSONResponse({"status": "ok", "error": ""})
+
+
+@APP.get("/token")
+def token_refresh(_username: Annotated[str, Depends(current_username)], access_token: str):
+    if access_token == CFG.options["nc_auth_access_token"]:
+        oauth_client = OAuth2Session(CFG.options["nc_auth_client_id"], CFG.options["nc_auth_client_secret"])
+        token_url = CFG.options["nc_url"] + "/apps/oauth2/api/v1/token"
+        fetched_token = oauth_client.fetch_token(url=token_url, code=CFG.options["nc_auth_refresh_token"])
+        CFG.options["nc_auth_access_token"] = fetched_token["access_token"]
+        CFG.options["nc_auth_refresh_token"] = fetched_token["refresh_token"]
+        CFG.save()
+    return JSONResponse({"status": "ok", "error": "", "token": CFG.options["nc_auth_access_token"]})
 
 
 if __name__ == "__main__":

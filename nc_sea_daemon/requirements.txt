@@ -1,3 +1,4 @@
+authlib
 fastapi
-uvicorn
 python-multipart
+uvicorn
