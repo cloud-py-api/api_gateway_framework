@@ -1,0 +1,57 @@
+ci:
+  skip: [pylint]
+
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+    -   id: check-yaml
+        exclude: (^3rdparty)
+    -   id: check-toml
+        exclude: (^3rdparty)
+    -   id: end-of-file-fixer
+        exclude: (^3rdparty|^l10n)
+    -   id: trailing-whitespace
+        exclude: (^3rdparty|^l10n)
+    -   id: mixed-line-ending
+        exclude: (^3rdparty)
+
+-   repo: https://github.com/PyCQA/isort
+    rev: 5.12.0
+    hooks:
+    -   id: isort
+        files: nc_sea_daemon/
+
+-   repo: https://github.com/psf/black
+    rev: 23.1.0
+    hooks:
+    -   id: black
+        files: nc_sea_daemon/
+
+-   repo: https://github.com/PyCQA/flake8
+    rev: 6.0.0
+    hooks:
+    -   id: flake8
+        types: [file, python]
+        files: nc_sea_daemon/
+
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.1.1
+    hooks:
+     -  id: mypy
+        files: nc_sea_daemon/
+        additional_dependencies: [pytest]
+
+-   repo: local
+    hooks:
+    -   id: pylint
+        name: pylint
+        entry: pylint "nc_sea_daemon/"
+        language: system
+        types: [ python ]
+        pass_filenames: false
+        args:
+            [
+                "-rn", # Only display messages
+                "-sn", # Don't display the score
+            ]

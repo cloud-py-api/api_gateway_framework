@@ -1,9 +1,12 @@
+"""
+Configuration related stuff lives here
+"""
+
 from json import dump, load
-from os import path, mkdir, scandir
+from os import mkdir, path, scandir
 
 
 class Config:
-
     config_name = "daemon_cfg.json"
     apps_folder = "apps"
 
@@ -17,7 +20,7 @@ class Config:
         if not path.isfile(self.config_name):
             self.load_default_values()
         # load config
-        with open(self.config_name, "r") as fp:
+        with open(self.config_name, "r", encoding="utf8") as fp:
             cfg = load(fp)
             self.apps = cfg["apps"]
             self.options = cfg["options"]
@@ -28,7 +31,7 @@ class Config:
                 self.apps[obj.name] = {}
 
     def load_default_values(self):
-        self.options["log_level"] = "WARNING"
+        self.options["log_level"] = "WARN"
         self.options["host"] = "127.0.0.1"
         self.options["port"] = 8063
         self.options["xauth"] = "nextcloud:"
@@ -40,6 +43,6 @@ class Config:
                 raise ValueError(f"Can not find `{k}` key in {self.config_name}")
 
     def save(self):
-        with open(self.config_name, "w") as fp:
+        with open(self.config_name, "w", encoding="utf8") as fp:
             cfg = {"apps": self.apps, "options": self.options}
             dump(cfg, fp, indent=4)
