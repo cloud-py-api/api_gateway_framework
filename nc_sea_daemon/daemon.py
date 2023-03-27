@@ -4,7 +4,7 @@ EntryPoint of the daemon.
 
 import logging as log
 from json import load, loads
-from os import environ, path, chdir
+from os import chdir, environ, path
 from secrets import compare_digest
 from shutil import rmtree
 from subprocess import Popen
@@ -27,11 +27,11 @@ APPS_STATUS: Dict[str, List[Popen]] = {}
 
 
 _nameToLevel = {
-    'FATAL': 50,
-    'ERROR': 40,
-    'WARN': 30,
-    'INFO': 20,
-    'DEBUG': 10,
+    "FATAL": 50,
+    "ERROR": 40,
+    "WARN": 30,
+    "INFO": 20,
+    "DEBUG": 10,
 }
 
 
@@ -77,9 +77,12 @@ def daemon_update(_username: Annotated[str, Depends(current_username)], version_
 
 
 @APP.post("/app-install")
-def app_install(_username: Annotated[str, Depends(current_username)], app_name: str, data: bytes = File()):
+def app_install(
+    _username: Annotated[str, Depends(current_username)], app_name: str, url_data: str = "", data: bytes = File()
+):
     _ = app_name
     _ = data
+    _ = url_data
     return JSONResponse({"status": "ok", "error": ""})
 
 
@@ -108,8 +111,26 @@ def app_run(_username: Annotated[str, Depends(current_username)], app_name: str,
     entry_point = app_config.get("entry_point", None)
     if entry_point is None:
         return JSONResponse({"status": "fail", "error": "`entrypoint` value missing from app config."})
+    if not CFG.options["nc_url"]:
+        return JSONResponse({"status": "fail", "error": "`nc_url` in config does not filled."})
+    oauth2 = False
+    if not CFG.options.get("nc_auth_user", "") and not CFG.options.get("nc_auth_password", ""):
+        if (
+            not CFG.options.get("nc_auth_client_id", "")
+            and not CFG.options.get("nc_auth_client_secret", "")
+            and not CFG.options.get("nc_auth_access_token", "")
+            and not CFG.options.get("nc_auth_refresh_token", "")
+        ):
+            return JSONResponse({"status": "fail", "error": "`nc_auth_*` does not contain all required information."})
+        oauth2 = True
     app_config_args: List = app_config.get("args", [])
     modified_env = environ.copy()
+    modified_env["nextcloud_url"] = CFG.options["nc_url"]
+    if oauth2:
+        modified_env[f"nc_auth_access_token"] = CFG.options[f"nc_auth_access_token"]
+    else:
+        modified_env[f"nc_auth_user"] = CFG.options[f"nc_auth_user"]
+        modified_env[f"nc_auth_password"] = CFG.options[f"nc_auth_password"]
     modified_env.update(**app_cfg_daemon)
     try:
         app_args = loads(args)

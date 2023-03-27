@@ -35,6 +35,7 @@ class Config:
         self.options["host"] = "127.0.0.1"
         self.options["port"] = 8063
         self.options["xauth"] = "nextcloud:"
+        self.options["nc_url"] = ""
         self.save()
 
     def check_config(self):
