@@ -23,27 +23,35 @@
  *
  */
 
-namespace OCA\CloudApiGateway\AppInfo;
+namespace OCA\CloudApiGateway\Listener;
 
-use OCA\CloudApiGateway\Listener\ContentSecurityPolicyListener;
-use OCP\AppFramework\App;
-use OCP\AppFramework\Bootstrap\IRegistrationContext;
-use OCP\AppFramework\Bootstrap\IBootContext;
-use OCP\AppFramework\Bootstrap\IBootstrap;
+use OCP\AppFramework\Http\ContentSecurityPolicy;
+use OCP\EventDispatcher\Event;
+use OCP\EventDispatcher\IEventListener;
 use OCP\Security\CSP\AddContentSecurityPolicyEvent;
 
-class Application extends App implements IBootstrap {
-	public const APP_ID = 'api_gateway_framework';
+class ContentSecurityPolicyListener implements IEventListener {
 
-	public function __construct(array $urlParams = []) {
-		parent::__construct(self::APP_ID, $urlParams);
+	public function __construct() {
 	}
 
-	public function register(IRegistrationContext $context): void {
-		$context->registerEventListener(AddContentSecurityPolicyEvent::class, ContentSecurityPolicyListener::class);
-	}
+	public function handle(Event $event): void {
+		if (!($event instanceof AddContentSecurityPolicyEvent)) {
+			return;
+		}
 
-	public function boot(IBootContext $context): void {
+		$csp = new ContentSecurityPolicy();
+		$csp->addAllowedFrameDomain('\'self\'');
+		$csp->addAllowedFrameAncestorDomain('\'self\'');
+		$csp->addAllowedFrameDomain('http://localhost');
+		$csp->addAllowedFrameDomain('http://127.0.0.1');
+		$csp->addAllowedFrameDomain('http://localhost:*');
+		$csp->addAllowedFrameDomain('http://127.0.0.1:*');
+		$csp->addAllowedFrameDomain('https://localhost');
+		$csp->addAllowedFrameDomain('https://127.0.0.1');
+		$csp->addAllowedFrameDomain('https://localhost:*');
+		$csp->addAllowedFrameDomain('https://127.0.0.1:*');
+
+		$event->addPolicy($csp);
 	}
 }
-

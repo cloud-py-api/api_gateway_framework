@@ -87,5 +87,5 @@ class Connection:
     def __request_prepare(self) -> None:
         if not self.adapter:
             limits = Limits(max_keepalive_connections=20, max_connections=20, keepalive_expiry=15.0)
-            self.adapter = Client(auth=self.config.auth, follow_redirects=True, limits=limits)
+            self.adapter = Client(auth=self.config.auth, follow_redirects=True, limits=limits, verify=False)
             self.adapter.headers.update({"OCS-APIRequest": "true"})

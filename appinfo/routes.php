@@ -32,6 +32,7 @@ return [
 		['name' => 'api#updateDaemonInfo', 'url' => '/daemon/{daemonId}', 'verb' => 'PUT'],
 		['name' => 'api#getDaemonInfoByName', 'url' => '/daemon/name/{daemonName}', 'verb' => 'GET'],
 		['name' => 'api#runDaemonApp', 'url' => '/daemon/run', 'verb' => 'POST'],
+		// ['name' => 'api#stopDaemonApp', 'url' => '/daemon/stop', 'verb' => 'POST'],
 		['name' => 'api#checkDaemonConnectionByName', 'url' => '/daemon/name/{daemonName}/status', 'verb' => 'GET'],
 		['name' => 'api#deleteDaemonConnection', 'url' => '/daemon/{daemonId}', 'verb' => 'DELETE'],
 		['name' => 'api#checkDaemonConnection', 'url' => '/daemon/{daemonId}/status', 'verb' => 'GET'],

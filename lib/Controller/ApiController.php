@@ -33,6 +33,8 @@ use OCP\Http\Client\IClientService;
 
 use OCA\CloudApiGateway\Service\ApiService;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Response;
+use OCP\IURLGenerator;
 use Psr\Log\LoggerInterface;
 
 class ApiController extends Controller {
@@ -41,6 +43,9 @@ class ApiController extends Controller {
 
 	/** @var ApiService */
 	private $apiService;
+
+	/** @var IURLGenerator */
+	private $urlGenerator;
 
 	/** @var LoggerInterface */
 	private $logger;
@@ -54,12 +59,14 @@ class ApiController extends Controller {
 		IClientService $clientService,
 		ApiService $apiService,
 		LoggerInterface $logger,
+		IURLGenerator $urlGenerator,
 		?string $userId,
 	) {
 		parent::__construct($appName, $request);
 
 		$this->client = $clientService->newClient();
 		$this->apiService = $apiService;
+		$this->urlGenerator = $urlGenerator;
 		$this->logger = $logger;
 		$this->userId = $userId;
 	}

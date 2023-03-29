@@ -118,6 +118,21 @@
 				</NcButton>
 			</div>
 		</NcSettingsSection>
+		<NcSettingsSection :title="t('api_gateway_framework', 'IFrame test')"
+			:description="t('api_gateway_framework', 'External apps daemons iframe tests')">
+			<div class="input-field">
+				<label for="test-app-iframe" style="margin-right: 10px;">
+					{{ t('api_gateway_framework', 'Daemon iframe url:') }}
+				</label>
+				<NcInputField id="test-app-iframe"
+					:value.sync="testAppIframeUrl"
+					:label-outside="true"
+					style="margin-bottom: 20px;" />
+			</div>
+			<iframe v-if="testAppIframeUrl !== ''"
+				:src="testAppIframeUrl"
+				style="width: 100%; height: 500px;" />
+		</NcSettingsSection>
 		<!-- TODO: Add bug report section with retrieving information from configured daemons -->
 	</div>
 </template>
@@ -167,6 +182,7 @@ export default {
 			testAppName: 'hello_world',
 			testDaemon: null,
 			runningTestApp: false,
+			testAppIframeUrl: '',
 		}
 	},
 	computed: {
@@ -272,5 +288,9 @@ export default {
 
 .actions {
 	display: flex;
+}
+
+.input-field {
+	width: fit-content;
 }
 </style>
