@@ -10,7 +10,7 @@ from pathlib import Path
 from secrets import compare_digest
 from shutil import rmtree
 from subprocess import Popen, run
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import requests
 
@@ -20,6 +20,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from typing_extensions import Annotated
+from pydantic import BaseModel
 
 APP = FastAPI()
 SECURITY = HTTPBasic()
@@ -27,6 +28,19 @@ SECURITY = HTTPBasic()
 CFG = Config()
 LOG = log.getLogger()
 APPS_STATUS: Dict[str, List[Popen]] = {}
+
+
+class AppRun(BaseModel):
+    nc_url: str
+    user_token: str
+    app_name: str
+    args: str = "[]"
+
+
+class Option(BaseModel):
+    key: str
+    value: str
+    app_name: Union[str, None] = None
 
 
 def current_username(credentials: Annotated[HTTPBasicCredentials, Depends(SECURITY)]):
@@ -133,41 +147,41 @@ def app_remove(_username: Annotated[str, Depends(current_username)], app_name: s
 
 
 @APP.post("/app-run")
-def app_run(_username: Annotated[str, Depends(current_username)], nc_url: str, user_token: str, app_name: str, args: str = "[]"):
-    app_cfg_daemon = CFG.apps.get(app_name, None)
+def app_run(_username: Annotated[str, Depends(current_username)], params: AppRun):
+    app_cfg_daemon = CFG.apps.get(params.app_name, None)
     if app_cfg_daemon is None:
         return JSONResponse({"status": "fail", "error": "App with specified name does not found."})
-    app_config = _load_app_config(app_name)
+    app_config = _load_app_config(params.app_name)
     if app_config is None:
         return JSONResponse({"status": "fail", "error": "Can not load app config file."})
     entry_point = app_config.get("entry_point", None)
     if entry_point is None:
         return JSONResponse({"status": "fail", "error": "`entrypoint` value missing from app config."})
-    nc_auth = user_token.split(":", 1)
+    nc_auth = params.user_token.split(":", 1)
     if len(nc_auth) != 2:
         return JSONResponse({"status": "fail", "error": "`user_token` does not contain all required information."})
     app_config_args: List = app_config.get("args", [])
     modified_env = environ.copy()
-    modified_env["nextcloud_url"] = nc_url
+    modified_env["nextcloud_url"] = params.nc_url
     modified_env["nc_auth_user"] = nc_auth[0]
-    modified_env["nc_auth_password"] = nc_auth[1]
+    modified_env["nc_auth_pass"] = nc_auth[1]
     modified_env.update(**app_cfg_daemon)
     try:
-        app_args = loads(args)
+        app_args = loads(params.args)
     except Exception as e:  # noqa # pylint: disable=broad-except
         json_data = jsonable_encoder({"status": "fail", "error": "Arg parse error: " + str(e)})
         return JSONResponse(json_data)
     try:
         cmd = [str(i) for i in [entry_point, *app_config_args, *app_args]]
         # pylint: disable=consider-using-with
-        process = Popen(cmd, env=modified_env, cwd=path.abspath(f"apps/{app_name}"))
+        process = Popen(cmd, env=modified_env, cwd=path.abspath(f"apps/{params.app_name}"))
         # pylint: enable=consider-using-with
     except (OSError, TypeError) as e:
         json_data = jsonable_encoder({"status": "fail", "error": "Popen error: " + str(e)})
         return JSONResponse(json_data)
-    if app_name not in APPS_STATUS:
-        APPS_STATUS[app_name] = []
-    APPS_STATUS[app_name].append(process)
+    if params.app_name not in APPS_STATUS:
+        APPS_STATUS[params.app_name] = []
+    APPS_STATUS[params.app_name].append(process)
     return JSONResponse({"status": "ok", "error": "", "pid": str(process.pid)})
 
 
@@ -194,14 +208,14 @@ def option_get(_username: Annotated[str, Depends(current_username)], key: str, a
 
 
 @APP.post("/option")
-def option_set(_username: Annotated[str, Depends(current_username)], key: str, value: str, app_name: str = ""):
-    if app_name:
-        app_config = CFG.apps.get(app_name, None)
+def option_set(_username: Annotated[str, Depends(current_username)], option: Option):
+    if option.app_name:
+        app_config = CFG.apps.get(option.app_name, None)
         if app_config is None:
-            return JSONResponse({"status": "fail", "error": f"app with name='{app_name}' not found"})
-        app_config[key] = value
+            return JSONResponse({"status": "fail", "error": f"app with name='{option.app_name}' not found"})
+        app_config[option.key] = option.value
     else:
-        CFG.options[key] = value
+        CFG.options[option.key] = option.value
     CFG.save()
     return JSONResponse({"status": "ok", "error": ""})
 

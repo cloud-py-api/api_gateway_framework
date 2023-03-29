@@ -1,5 +1,5 @@
 {
   "entry_point":"python3",
-  "args": ["hello_world.py", 60.0],
-  "after_install": []
+  "args": ["hello_world.py"],
+  "after_install": ["python3", "-m", "pip", "install", "uvicorn", "fastapi", "httpx"]
 }

@@ -15,7 +15,7 @@ class ConnectConfig:
     def __init__(self, **kwargs):
         self.full_nc_url: str = self._get_value("nextcloud_url", **kwargs)
         self.endpoint = self.full_nc_url.removesuffix("/index.php")
-        self.auth = (self._get_value("nc_auth_user", **kwargs), self._get_value("nc_auth_password", **kwargs))
+        self.auth = (self._get_value("nc_auth_user", **kwargs), self._get_value("nc_auth_pass", **kwargs))
 
     def _get_value(self, value_name, **kwargs):
         value = kwargs.get(value_name, None)

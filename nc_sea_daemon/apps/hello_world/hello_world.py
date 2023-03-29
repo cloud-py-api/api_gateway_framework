@@ -3,15 +3,28 @@ Simplest example.
 """
 
 import sys
-from time import sleep
+
+from uvicorn import run
+from fastapi.responses import Response
+from fastapi import FastAPI
 
 from nextcloud_sdk import Nextcloud
 
-if __name__ == "__main__":
+
+APP = FastAPI()
+
+
+@APP.get("/iframe")
+def hello_world():
     nxc = Nextcloud()
-    print(nxc.users.list_users())
-    print("hello world!")
-    print(f"me was run with {len(sys.argv) - 2} arguments from NC.")
-    sleep(float(sys.argv[1]))
-    print("exit")
+    return Response(f"Hello world! \nHere is the list of Nextcloud users:\n {nxc.users.list_users()}")
+
+
+if __name__ == "__main__":
+    run(
+        "hello_world:APP",
+        host="127.0.0.1",
+        port=8777,
+        log_level=40,
+    )
     sys.exit(0)
