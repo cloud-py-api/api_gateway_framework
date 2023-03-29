@@ -4,16 +4,19 @@ EntryPoint of the daemon.
 
 import logging as log
 from json import load, loads
-from os import chdir, environ, path
+from os import chdir, environ, path, makedirs, remove
 from secrets import compare_digest
 from shutil import rmtree
 from subprocess import Popen
 from typing import Dict, List
+import tarfile
+from pathlib import Path
 
+import requests
 import uvicorn
 from authlib.integrations.requests_client import OAuth2Session
 from config import Config
-from fastapi import Depends, FastAPI, File, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -78,12 +81,35 @@ def daemon_update(_username: Annotated[str, Depends(current_username)], version_
 
 
 @APP.post("/app-install")
-def app_install(
-    _username: Annotated[str, Depends(current_username)], app_name: str, url_data: str = "", data: bytes = File()
-):
-    _ = app_name
-    _ = data
-    _ = url_data
+def app_install(_username: Annotated[str, Depends(current_username)], app_name: str, package_url: str):
+    # REWORK: this should be in a separate thread with notification to NC part when app install finished
+    # Status: waiting: endpoint to send notify to, to be implemented by Andrey.
+    destination_path = path.join("apps", app_name)
+    try:
+        file_request = requests.get(package_url, allow_redirects=True)
+        data = file_request.content
+        with open(app_name + "_install_tmp.tar.gz", "wb") as fp:
+            fp.write(data)
+        archive_name = app_name + "_install_tmp.tar.gz"
+        makedirs(destination_path, exist_ok=True)
+
+        def members(tf):
+            for member in tf.getmembers():
+                stripped_path = Path(*Path(member.path).parts[1:])
+                if stripped_path.name:
+                    member.path = stripped_path
+                    yield member
+
+        with tarfile.open(archive_name, "r") as tar:
+            tar.extractall(members=members(tar), path=destination_path)
+
+        remove(archive_name)
+        result = CFG.app_to_config(app_name)
+        if not result:
+            raise RuntimeError("Error during installing app.")
+    except Exception as e:  # noqa
+        rmtree(destination_path, ignore_errors=True)
+        return JSONResponse({"status": "fail", "error": str(e)})
     return JSONResponse({"status": "ok", "error": ""})
 
 
@@ -99,7 +125,7 @@ def app_remove(_username: Annotated[str, Depends(current_username)], app_name: s
 
 
 @APP.post("/app-run")
-def app_run(_username: Annotated[str, Depends(current_username)], app_name: str, args: str = "[]"):
+def app_run(_username: Annotated[str, Depends(current_username)], user_token: str, app_name: str, args: str = "[]"):
     app_cfg_daemon = CFG.apps.get(app_name, None)
     if app_cfg_daemon is None:
         return JSONResponse({"status": "fail", "error": "App with specified name does not found."})

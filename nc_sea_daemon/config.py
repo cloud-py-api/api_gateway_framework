@@ -28,7 +28,14 @@ class Config:
         # rescan apps folder, some of them can be installed manually by admin
         for obj in scandir(self.apps_folder):
             if obj.is_dir():
-                self.apps[obj.name] = {}
+                self.app_to_config(obj.name)
+
+    def app_to_config(self, app_name) -> bool:
+        appinfo_path = path.join(self.apps_folder, app_name, "appinfo.json")
+        if path.isfile(appinfo_path):
+            self.apps[app_name] = {}
+            return True
+        return False
 
     def load_default_values(self):
         self.options["log_level"] = "WARN"

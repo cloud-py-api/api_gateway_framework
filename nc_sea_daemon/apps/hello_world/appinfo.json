@@ -1,4 +1,5 @@
 {
   "entry_point":"python3",
-  "args": ["hello_world.py", "60.0"]
+  "args": ["hello_world.py", 60.0],
+  "after_install": ""
 }

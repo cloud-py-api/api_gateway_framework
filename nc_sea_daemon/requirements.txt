@@ -1,4 +1,5 @@
 authlib
 fastapi
 python-multipart
+requests
 uvicorn
