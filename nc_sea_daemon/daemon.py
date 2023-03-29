@@ -39,8 +39,11 @@ class AppRun(BaseModel):
 
 class Option(BaseModel):
     key: str
-    value: str
+    value: Union[int, float, str]
     app_name: Union[str, None] = None
+
+    class Config:
+        smart_union = True
 
 
 def current_username(credentials: Annotated[HTTPBasicCredentials, Depends(SECURITY)]):

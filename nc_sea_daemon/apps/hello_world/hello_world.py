@@ -12,12 +12,12 @@ from nextcloud_sdk import Nextcloud
 
 
 APP = FastAPI()
+NC_CLIENT = Nextcloud()
 
 
 @APP.get("/iframe")
 def hello_world():
-    nxc = Nextcloud()
-    return Response(f"Hello world! \nHere is the list of Nextcloud users:\n {nxc.users.list_users()}")
+    return Response(f"Hello world! \nHere is the list of Nextcloud users:\n {NC_CLIENT.users.list_users()}")
 
 
 if __name__ == "__main__":
