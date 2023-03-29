@@ -5,7 +5,7 @@ EntryPoint of the daemon.
 import logging as log
 import tarfile
 from json import load, loads
-from os import chdir, environ, makedirs, path, remove
+from os import environ, makedirs, path, remove
 from pathlib import Path
 from secrets import compare_digest
 from shutil import rmtree
@@ -13,7 +13,7 @@ from subprocess import Popen, run
 from typing import Dict, List, Optional
 
 import requests
-import uvicorn
+
 from config import Config
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.encoders import jsonable_encoder
@@ -27,15 +27,6 @@ SECURITY = HTTPBasic()
 CFG = Config()
 LOG = log.getLogger()
 APPS_STATUS: Dict[str, List[Popen]] = {}
-
-
-_nameToLevel = {
-    "FATAL": 50,
-    "ERROR": 40,
-    "WARN": 30,
-    "INFO": 20,
-    "DEBUG": 10,
-}
 
 
 def current_username(credentials: Annotated[HTTPBasicCredentials, Depends(SECURITY)]):
@@ -90,10 +81,11 @@ def daemon_update(_username: Annotated[str, Depends(current_username)], version_
 
 
 @APP.post("/app-install")
-def app_install(_username: Annotated[str, Depends(current_username)], user_token: str, app_name: str, package_url: str):
+def app_install(_username: Annotated[str, Depends(current_username)], nc_url: str, user_token: str, app_name: str, package_url: str):
     # REWORK: this should be in a separate thread with notification to NC part when app install finished
     # Status: waiting: endpoint to send notify to, to be implemented by Andrey.
     _ = user_token
+    _ = nc_url
     destination_path = path.join("apps", app_name)
     try:
         file_request = requests.get(package_url, allow_redirects=True)
@@ -141,7 +133,7 @@ def app_remove(_username: Annotated[str, Depends(current_username)], app_name: s
 
 
 @APP.post("/app-run")
-def app_run(_username: Annotated[str, Depends(current_username)], user_token: str, app_name: str, args: str = "[]"):
+def app_run(_username: Annotated[str, Depends(current_username)], nc_url: str, user_token: str, app_name: str, args: str = "[]"):
     app_cfg_daemon = CFG.apps.get(app_name, None)
     if app_cfg_daemon is None:
         return JSONResponse({"status": "fail", "error": "App with specified name does not found."})
@@ -151,14 +143,12 @@ def app_run(_username: Annotated[str, Depends(current_username)], user_token: st
     entry_point = app_config.get("entry_point", None)
     if entry_point is None:
         return JSONResponse({"status": "fail", "error": "`entrypoint` value missing from app config."})
-    if not CFG.options.get("nc_url", None):
-        return JSONResponse({"status": "fail", "error": "`nc_url` in config does not filled."})
     nc_auth = user_token.split(":", 1)
     if len(nc_auth) != 2:
         return JSONResponse({"status": "fail", "error": "`user_token` does not contain all required information."})
     app_config_args: List = app_config.get("args", [])
     modified_env = environ.copy()
-    modified_env["nextcloud_url"] = CFG.options["nc_url"].replace("/index.php", "")
+    modified_env["nextcloud_url"] = nc_url
     modified_env["nc_auth_user"] = nc_auth[0]
     modified_env["nc_auth_password"] = nc_auth[1]
     modified_env.update(**app_cfg_daemon)
@@ -216,16 +206,6 @@ def option_set(_username: Annotated[str, Depends(current_username)], key: str, v
     return JSONResponse({"status": "ok", "error": ""})
 
 
-if __name__ == "__main__":
-    chdir(path.dirname(path.abspath(__file__)))
+@APP.on_event("startup")
+def startup():
     print(f"http://{CFG.options['host']}:{CFG.options['port']}/status")  # For development
-    log.basicConfig(format="%(levelname)s:%(name)s:%(module)s:%(funcName)s:%(message)s")
-    log_level = _nameToLevel[CFG.options["log_level"]]
-    LOG.setLevel(level=log_level)
-    log.error("Logger initialized.")
-    uvicorn.run(
-        "daemon:APP",
-        host=CFG.options["host"],
-        port=CFG.options["port"],
-        log_level=log_level,
-    )
