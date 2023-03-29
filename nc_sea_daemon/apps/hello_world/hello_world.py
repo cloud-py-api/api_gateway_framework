@@ -5,7 +5,11 @@ Simplest example.
 import sys
 from time import sleep
 
+from nextcloud_sdk import Nextcloud
+
 if __name__ == "__main__":
+    nxc = Nextcloud()
+    print(nxc.users.list_users())
     print("hello world!")
     print(f"me was run with {len(sys.argv) - 2} arguments from NC.")
     sleep(float(sys.argv[1]))

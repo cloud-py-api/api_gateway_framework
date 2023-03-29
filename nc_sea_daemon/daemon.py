@@ -3,18 +3,17 @@ EntryPoint of the daemon.
 """
 
 import logging as log
+import tarfile
 from json import load, loads
-from os import chdir, environ, path, makedirs, remove
+from os import chdir, environ, makedirs, path, remove
+from pathlib import Path
 from secrets import compare_digest
 from shutil import rmtree
-from subprocess import Popen
-from typing import Dict, List
-import tarfile
-from pathlib import Path
+from subprocess import Popen, run
+from typing import Dict, List, Optional
 
 import requests
 import uvicorn
-from authlib.integrations.requests_client import OAuth2Session
 from config import Config
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.encoders import jsonable_encoder
@@ -55,6 +54,16 @@ def current_username(credentials: Annotated[HTTPBasicCredentials, Depends(SECURI
     return credentials.username
 
 
+def _load_app_config(app_name: str) -> Optional[dict]:
+    app_root_path = path.join("apps", app_name)
+    try:
+        with open(path.join(app_root_path, "appinfo.json"), "r", encoding="utf8") as fp:
+            app_config = load(fp)
+    except OSError:
+        return None
+    return app_config
+
+
 @APP.get("/status")
 def daemon_status(_username: Annotated[str, Depends(current_username)]):
     app_status: Dict[str, list] = {}
@@ -81,9 +90,10 @@ def daemon_update(_username: Annotated[str, Depends(current_username)], version_
 
 
 @APP.post("/app-install")
-def app_install(_username: Annotated[str, Depends(current_username)], app_name: str, package_url: str):
+def app_install(_username: Annotated[str, Depends(current_username)], user_token: str, app_name: str, package_url: str):
     # REWORK: this should be in a separate thread with notification to NC part when app install finished
     # Status: waiting: endpoint to send notify to, to be implemented by Andrey.
+    _ = user_token
     destination_path = path.join("apps", app_name)
     try:
         file_request = requests.get(package_url, allow_redirects=True)
@@ -107,6 +117,12 @@ def app_install(_username: Annotated[str, Depends(current_username)], app_name: 
         result = CFG.app_to_config(app_name)
         if not result:
             raise RuntimeError("Error during installing app.")
+        app_config = _load_app_config(app_name)
+        if app_config is None:
+            return JSONResponse({"status": "fail", "error": "Can not load app config file."})
+        setup_script = app_config.get("after_install", None)
+        if setup_script:
+            run(setup_script, cwd=path.abspath(f"apps/{app_name}"))
     except Exception as e:  # noqa
         rmtree(destination_path, ignore_errors=True)
         return JSONResponse({"status": "fail", "error": str(e)})
@@ -129,35 +145,22 @@ def app_run(_username: Annotated[str, Depends(current_username)], user_token: st
     app_cfg_daemon = CFG.apps.get(app_name, None)
     if app_cfg_daemon is None:
         return JSONResponse({"status": "fail", "error": "App with specified name does not found."})
-    app_root_path = path.join("apps", app_name)
-    try:
-        with open(path.join(app_root_path, "appinfo.json"), "r", encoding="utf8") as fp:
-            app_config = load(fp)
-    except OSError:
+    app_config = _load_app_config(app_name)
+    if app_config is None:
         return JSONResponse({"status": "fail", "error": "Can not load app config file."})
     entry_point = app_config.get("entry_point", None)
     if entry_point is None:
         return JSONResponse({"status": "fail", "error": "`entrypoint` value missing from app config."})
-    if not CFG.options["nc_url"]:
+    if not CFG.options.get("nc_url", None):
         return JSONResponse({"status": "fail", "error": "`nc_url` in config does not filled."})
-    oauth2 = False
-    if not CFG.options.get("nc_auth_user", "") and not CFG.options.get("nc_auth_password", ""):
-        if (
-            not CFG.options.get("nc_auth_client_id", "")
-            and not CFG.options.get("nc_auth_client_secret", "")
-            and not CFG.options.get("nc_auth_access_token", "")
-            and not CFG.options.get("nc_auth_refresh_token", "")
-        ):
-            return JSONResponse({"status": "fail", "error": "`nc_auth_*` does not contain all required information."})
-        oauth2 = True
+    nc_auth = user_token.split(":", 1)
+    if len(nc_auth) != 2:
+        return JSONResponse({"status": "fail", "error": "`user_token` does not contain all required information."})
     app_config_args: List = app_config.get("args", [])
     modified_env = environ.copy()
     modified_env["nextcloud_url"] = CFG.options["nc_url"].replace("/index.php", "")
-    if oauth2:
-        modified_env["nc_auth_access_token"] = CFG.options["nc_auth_access_token"]
-    else:
-        modified_env["nc_auth_user"] = CFG.options["nc_auth_user"]
-        modified_env["nc_auth_password"] = CFG.options["nc_auth_password"]
+    modified_env["nc_auth_user"] = nc_auth[0]
+    modified_env["nc_auth_password"] = nc_auth[1]
     modified_env.update(**app_cfg_daemon)
     try:
         app_args = loads(args)
@@ -165,10 +168,11 @@ def app_run(_username: Annotated[str, Depends(current_username)], user_token: st
         json_data = jsonable_encoder({"status": "fail", "error": "Arg parse error: " + str(e)})
         return JSONResponse(json_data)
     try:
+        cmd = [str(i) for i in [entry_point, *app_config_args, *app_args]]
         # pylint: disable=consider-using-with
-        process = Popen([entry_point, *app_config_args, *app_args], env=modified_env, cwd=path.abspath(app_root_path))
+        process = Popen(cmd, env=modified_env, cwd=path.abspath(f"apps/{app_name}"))
         # pylint: enable=consider-using-with
-    except OSError as e:
+    except (OSError, TypeError) as e:
         json_data = jsonable_encoder({"status": "fail", "error": "Popen error: " + str(e)})
         return JSONResponse(json_data)
     if app_name not in APPS_STATUS:
@@ -210,18 +214,6 @@ def option_set(_username: Annotated[str, Depends(current_username)], key: str, v
         CFG.options[key] = value
     CFG.save()
     return JSONResponse({"status": "ok", "error": ""})
-
-
-@APP.get("/token")
-def token_refresh(_username: Annotated[str, Depends(current_username)], access_token: str):
-    if access_token == CFG.options["nc_auth_access_token"]:
-        oauth_client = OAuth2Session(CFG.options["nc_auth_client_id"], CFG.options["nc_auth_client_secret"])
-        token_url = CFG.options["nc_url"] + "/apps/oauth2/api/v1/token"
-        fetched_token = oauth_client.fetch_token(url=token_url, code=CFG.options["nc_auth_refresh_token"])
-        CFG.options["nc_auth_access_token"] = fetched_token["access_token"]
-        CFG.options["nc_auth_refresh_token"] = fetched_token["refresh_token"]
-        CFG.save()
-    return JSONResponse({"status": "ok", "error": "", "token": CFG.options["nc_auth_access_token"]})
 
 
 if __name__ == "__main__":
