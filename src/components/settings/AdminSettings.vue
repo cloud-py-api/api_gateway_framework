@@ -128,10 +128,16 @@
 					:value.sync="testAppIframeUrl"
 					:label-outside="true"
 					style="margin-bottom: 20px;" />
+				<NcButton
+					:label="t('api_gateway_framework', 'Open daemon frame')"
+					type="secondary"
+					@click="showDaemonFrame">
+					{{ t('api_gateway_framework', 'Open daemon frame') }}
+				</NcButton>
 			</div>
-			<iframe v-if="testAppIframeUrl !== ''"
-				:src="testAppIframeUrl"
-				style="width: 100%; height: 500px;" />
+			<DaemonFrame v-if="testAppIframeUrl !== ''"
+				:show-daemon-frame-modal.sync="showDaemonFrameModal"
+				:url="testAppIframeUrl" />
 		</NcSettingsSection>
 		<!-- TODO: Add bug report section with retrieving information from configured daemons -->
 	</div>
@@ -155,6 +161,7 @@ import Plus from 'vue-material-design-icons/Plus.vue'
 import DaemonItem from '../daemon/DaemonItem.vue'
 import DaemonEdit from '../daemon/DaemonEdit.vue'
 import DaemonNew from '../daemon/DaemonNew.vue'
+import DaemonFrame from '../daemon/DaemonFrame.vue'
 
 export default {
 	name: 'AdminSettings',
@@ -168,6 +175,7 @@ export default {
 		DaemonItem,
 		DaemonNew,
 		DaemonEdit,
+		DaemonFrame,
 		Plus,
 	},
 	data() {
@@ -183,6 +191,7 @@ export default {
 			testDaemon: null,
 			runningTestApp: false,
 			testAppIframeUrl: '',
+			showDaemonFrameModal: false,
 		}
 	},
 	computed: {
@@ -268,6 +277,17 @@ export default {
 					this.runningTestApp = false
 					showError(t('api_gateway_framework', 'Error while executing test app'))
 				})
+		},
+		showDaemonFrame() {
+			if (this.testDaemon === null) {
+				showError(t('api_gateway_framework', 'Please select target daemon'))
+				return
+			}
+			if (this.testAppIframeUrl === '') {
+				showError(t('api_gateway_framework', 'Please enter URL of the app'))
+				return
+			}
+			this.showDaemonFrameModal = true
 		},
 	},
 }
